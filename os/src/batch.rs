@@ -152,3 +152,12 @@ pub fn run_next_app() -> ! {
     }
     panic!("Unreachable in batch::run_current_app!");
 }
+
+
+/// get bounds of current app
+pub fn get_app_bounds() -> (usize, usize) {
+    let app_manager = APP_MANAGER.exclusive_access();
+    let current_app = app_manager.get_current_app();
+
+    (app_manager.app_start[current_app], app_manager.app_start[current_app + 1])
+}
