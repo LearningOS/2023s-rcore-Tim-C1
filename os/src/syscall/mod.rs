@@ -26,8 +26,13 @@ mod process;
 
 use fs::*;
 use process::*;
+
+use crate::config::{MAX_SYSCALL_NUM, MAX_APP_NUM};
+use crate::task::get_current_task_num;
+// use crate::task::TASK_MANAGER;
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
+    unsafe { update_syscall_info(syscall_id) };
     match syscall_id {
         SYSCALL_WRITE => sys_write(args[0], args[1] as *const u8, args[2]),
         SYSCALL_EXIT => sys_exit(args[0] as i32),
@@ -36,4 +41,23 @@ pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
         SYSCALL_TASK_INFO => sys_task_info(args[0] as *mut TaskInfo),
         _ => panic!("Unsupported syscall_id: {}", syscall_id),
     }
+}
+
+// fn update_syscall_info(syscall_id: usize) {
+//     let inner = TASK_MANAGER.inner.exclusive_access();
+//     let current = inner.current_task;
+//     let mut syscall_info = inner.tasks[current].syscall_times; 
+//     syscall_info[syscall_id] += 1;
+// }
+
+/// app syscall infos
+static mut SYSCALL_INFOS: [[u32;MAX_SYSCALL_NUM];MAX_APP_NUM] = [[0;MAX_SYSCALL_NUM];MAX_APP_NUM];
+unsafe fn update_syscall_info(syscall_id: usize) {
+    let current = get_current_task_num();
+    SYSCALL_INFOS[current][syscall_id] += 1;
+}
+
+/// get syscall info for an app
+pub unsafe fn get_syscall_info(current: usize) -> [u32;MAX_SYSCALL_NUM] {
+    SYSCALL_INFOS[current]
 }
