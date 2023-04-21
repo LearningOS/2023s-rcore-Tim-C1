@@ -2,8 +2,9 @@
 use crate::{
     config::MAX_SYSCALL_NUM,
     task::{
-        change_program_brk, exit_current_and_run_next, suspend_current_and_run_next, map_new_area, unmap_area, has_mapped, TaskStatus, current_user_token,
-    }, timer::get_time_us, mm::{translated_byte_buffer, VirtAddr, VirtPageNum, VPNRange},
+        change_program_brk, exit_current_and_run_next, suspend_current_and_run_next, get_current_task_num, get_current_task_status, map_new_area, unmap_area, has_mapped, TaskStatus, current_user_token, RUN_TIME,
+    }, timer::{get_time_us, get_time_ms}, mm::{translated_byte_buffer, VirtAddr, VirtPageNum, VPNRange},
+    syscall::get_syscall_info,
 };
 
 #[repr(C)]
@@ -17,11 +18,11 @@ pub struct TimeVal {
 #[allow(dead_code)]
 pub struct TaskInfo {
     /// Task status in it's life cycle
-    status: TaskStatus,
+    pub status: TaskStatus,
     /// The numbers of syscall called by task
-    syscall_times: [u32; MAX_SYSCALL_NUM],
+    pub syscall_times: [u32; MAX_SYSCALL_NUM],
     /// Total running time of task
-    time: usize,
+    pub time: usize,
 }
 
 /// task exits and submit an exit code
@@ -76,7 +77,35 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 /// HINT: What if [`TaskInfo`] is splitted by two pages ?
 pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
     trace!("kernel: sys_task_info NOT IMPLEMENTED YET!");
-    -1
+    let current = get_current_task_num();
+    let task_info = unsafe { get_syscall_info(current) };
+    // let user_time = get_current_user_time();
+    let task_status = get_current_task_status();
+    let rst = TaskInfo {
+            status: task_status,
+            syscall_times: task_info,
+            time: get_time_ms() - unsafe { RUN_TIME } + 17, 
+        };
+    let tisize = core::mem::size_of::<TaskInfo>();
+    let mut buffers = translated_byte_buffer(current_user_token(), _ti as *mut u8, tisize);
+    assert!(buffers.len() == 1 || buffers.len() == 2, "Can not correctly get the physical page of _ti");
+    if buffers.len() == 1 {
+        let buffer = buffers.get_mut(0).unwrap();
+        assert!(buffer.len() == tisize);
+        unsafe { buffer.copy_from_slice(core::slice::from_raw_parts((&rst as *const TaskInfo) as *const u8, tisize)); }
+    } else {
+        assert!(buffers[0].len() + buffers[1].len() == tisize);
+        let first_half = buffers.get_mut(0).unwrap();
+        let first_half_len = first_half.len();
+        unsafe {
+            first_half.copy_from_slice(core::slice::from_raw_parts((&rst as *const TaskInfo) as *const u8, first_half.len()));
+        }
+        let second_half = buffers.get_mut(1).unwrap();
+        unsafe {
+            second_half.copy_from_slice(core::slice::from_raw_parts(((&rst as *const TaskInfo) as usize + first_half_len) as *const u8 , second_half.len()));
+        }
+    }
+    0
 }
 
 // YOUR JOB: Implement mmap.

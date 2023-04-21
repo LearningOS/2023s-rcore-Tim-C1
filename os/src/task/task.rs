@@ -28,6 +28,11 @@ pub struct TaskControlBlock {
 
     /// Program break
     pub program_brk: usize,
+
+    /// user time of task
+    pub user_time: usize,
+    /// kernel time of task
+    pub kernel_time: usize,
 }
 
 impl TaskControlBlock {
@@ -58,6 +63,8 @@ impl TaskControlBlock {
         let task_control_block = Self {
             task_status,
             task_cx: TaskContext::goto_trap_return(kernel_stack_top),
+            user_time: 0,
+            kernel_time: 0,
             memory_set,
             trap_cx_ppn,
             base_size: user_sp,
