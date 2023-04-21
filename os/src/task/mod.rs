@@ -15,6 +15,7 @@ mod switch;
 mod task;
 
 use crate::loader::{get_app_data, get_num_app};
+use crate::mm::{VirtAddr, MapPermission, VirtPageNum};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
@@ -153,6 +154,42 @@ impl TaskManager {
             panic!("All applications completed!");
         }
     }
+
+    /// map a new area
+    pub fn map_new_area(&self, va_start: VirtAddr, va_end: VirtAddr, flags: u8) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let memset = &mut inner.tasks[current].memory_set;
+        let mut perm = MapPermission::U;
+        if (flags & 0x1) > 0 {
+            perm |= MapPermission::R;
+        }
+
+        if (flags & 0x2) > 0 {
+            perm |= MapPermission::W;
+        }
+
+        if (flags & 0x4) > 0 {
+            perm |= MapPermission::X;
+        }
+        memset.insert_framed_area(va_start, va_end, perm); 
+    }
+
+    /// unmap an area
+    pub fn unmap_area(&self, va_start: VirtAddr) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let memset = &mut inner.tasks[current].memory_set;
+        memset.unmap_area(va_start);
+    }
+
+    /// check has mapped
+    pub fn has_mapped(&self, vpn: VirtPageNum) -> bool {
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let memset = &inner.tasks[current].memory_set;
+        memset.has_mapped(vpn)
+    }
 }
 
 /// Run the first task in task list.
@@ -201,4 +238,21 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+
+/// for mmap 
+pub fn map_new_area(va_start: VirtAddr, va_end: VirtAddr, flags: u8) {
+    TASK_MANAGER.map_new_area(va_start, va_end, flags);
+}
+
+
+/// for munmap
+pub fn unmap_area(va_start: VirtAddr) {
+    TASK_MANAGER.unmap_area(va_start);
+}
+
+
+/// has mapped
+pub fn has_mapped(vpn: VirtPageNum) -> bool {
+    TASK_MANAGER.has_mapped(vpn)
 }
