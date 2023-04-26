@@ -300,6 +300,27 @@ impl MemorySet {
             false
         }
     }
+    /// pop a map area
+    pub fn unmap_area(&mut self, start: VirtAddr) {
+        let area = self.areas.iter().position(|area| area.vpn_range.get_start() == start.into()).unwrap();
+        for vpn in self.areas[area].vpn_range {
+            self.page_table.unmap(vpn);
+        }
+        self.areas.remove(area);
+    }
+    /// has mapped
+    pub fn has_mapped(&self, vpn: VirtPageNum) -> bool {
+        let pt = &self.page_table;
+        if let Some(pte) = pt.find_pte(vpn) {
+            if pte.is_valid() {
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
 }
 /// map area structure, controls a contiguous piece of virtual memory
 pub struct MapArea {

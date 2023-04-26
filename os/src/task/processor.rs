@@ -7,11 +7,15 @@
 use super::__switch;
 use super::{fetch_task, TaskStatus};
 use super::{TaskContext, TaskControlBlock};
+use crate::mm::{VirtAddr, MapPermission, VirtPageNum};
 use crate::sync::UPSafeCell;
+use crate::timer::get_time_ms;
 use crate::trap::TrapContext;
 use alloc::sync::Arc;
 use lazy_static::*;
 
+/// total run time
+pub static mut RUN_TIME: usize = 0;
 /// Processor management structure
 pub struct Processor {
     ///The task currently executing on the current processor
@@ -44,6 +48,41 @@ impl Processor {
     pub fn current(&self) -> Option<Arc<TaskControlBlock>> {
         self.current.as_ref().map(Arc::clone)
     }
+    /// map a new area
+    pub fn map_new_area(&self, va_start: VirtAddr, va_end: VirtAddr, flags: u8) {
+        let current = self.current().unwrap();
+        let mut inner = current.inner_exclusive_access();
+        let memset = &mut inner.memory_set;
+        let mut perm = MapPermission::U;
+        if (flags & 0x1) > 0 {
+            perm |= MapPermission::R;
+        }
+
+        if (flags & 0x2) > 0 {
+            perm |= MapPermission::W;
+        }
+
+        if (flags & 0x4) > 0 {
+            perm |= MapPermission::X;
+        }
+        memset.insert_framed_area(va_start, va_end, perm); 
+    }
+
+    /// unmap an area
+    pub fn unmap_area(&self, va_start: VirtAddr) {
+        let current = self.current().unwrap();
+        let mut inner = current.inner_exclusive_access();
+        let memset = &mut inner.memory_set;
+        memset.unmap_area(va_start);
+    }
+
+    /// check has mapped
+    pub fn has_mapped(&self, vpn: VirtPageNum) -> bool {
+        let current = self.current().unwrap();
+        let mut inner = current.inner_exclusive_access();
+        let memset = &mut inner.memory_set;
+        memset.has_mapped(vpn)
+    }
 }
 
 lazy_static! {
@@ -53,6 +92,7 @@ lazy_static! {
 ///The main part of process execution and scheduling
 ///Loop `fetch_task` to get the process that needs to run, and switch the process through `__switch`
 pub fn run_tasks() {
+    unsafe {RUN_TIME += get_time_ms();}
     loop {
         let mut processor = PROCESSOR.exclusive_access();
         if let Some(task) = fetch_task() {
@@ -108,4 +148,20 @@ pub fn schedule(switched_task_cx_ptr: *mut TaskContext) {
     unsafe {
         __switch(switched_task_cx_ptr, idle_task_cx_ptr);
     }
+}
+/// for mmap 
+pub fn map_new_area(va_start: VirtAddr, va_end: VirtAddr, flags: u8) {
+    PROCESSOR.exclusive_access().map_new_area(va_start, va_end, flags);
+}
+
+
+/// for munmap
+pub fn unmap_area(va_start: VirtAddr) {
+    PROCESSOR.exclusive_access().unmap_area(va_start);
+}
+
+
+/// has mapped
+pub fn has_mapped(vpn: VirtPageNum) -> bool {
+    PROCESSOR.exclusive_access().has_mapped(vpn)
 }
