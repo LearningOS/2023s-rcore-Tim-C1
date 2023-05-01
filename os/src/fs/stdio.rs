@@ -39,6 +39,18 @@ impl File for Stdin {
     fn write(&self, _user_buf: UserBuffer) -> usize {
         panic!("Cannot write to stdin!");
     }
+
+    fn get_ino(&self) -> u64 {
+        todo!()
+    }
+
+    fn file_type(&self) -> super::StatMode {
+        todo!()
+    }
+
+    fn link_num(&self) -> usize {
+        todo!()
+    }
 }
 
 impl File for Stdout {
@@ -56,5 +68,16 @@ impl File for Stdout {
             print!("{}", core::str::from_utf8(*buffer).unwrap());
         }
         user_buf.len()
+    }
+    fn get_ino(&self) -> u64 {
+        todo!()
+    }
+
+    fn file_type(&self) -> super::StatMode {
+        todo!()
+    }
+
+    fn link_num(&self) -> usize {
+        todo!()
     }
 }

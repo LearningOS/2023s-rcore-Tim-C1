@@ -70,6 +70,16 @@ pub fn list_apps() {
     println!("**************/");
 }
 
+/// link
+pub fn link(old: &str, new: &str) {
+    ROOT_INODE.linkat(old, new);
+}
+
+/// unlink
+pub fn unlink(path: &str) {
+    ROOT_INODE.unlinkat(path);
+}
+
 bitflags! {
     ///  The flags argument to the open() system call is constructed by ORing together zero or more of the following values:
     pub struct OpenFlags: u32 {
@@ -154,5 +164,22 @@ impl File for OSInode {
             total_write_size += write_size;
         }
         total_write_size
+    }
+
+    fn get_ino(&self) -> u64 {
+        self.inner.exclusive_access().inode.get_ino() as u64
+    }
+
+    fn file_type(&self) -> super::StatMode {
+       let t = self.inner.exclusive_access().inode.get_type();
+       match t {
+           1 => super::StatMode::FILE,
+           _ => super::StatMode::DIR,
+       }
+    }
+
+    fn link_num(&self) -> usize {
+       let ino = self.get_ino();
+       self.inner.exclusive_access().inode.get_links(ino as usize) 
     }
 }

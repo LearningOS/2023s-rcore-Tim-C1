@@ -1,5 +1,5 @@
 //! File and filesystem-related syscalls
-use crate::fs::{open_file, OpenFlags, Stat};
+use crate::fs::{open_file, OpenFlags, Stat, link, unlink};
 use crate::mm::{translated_byte_buffer, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token};
 
@@ -81,7 +81,47 @@ pub fn sys_fstat(_fd: usize, _st: *mut Stat) -> isize {
         "kernel:pid[{}] sys_fstat NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let task = current_task().unwrap();
+    let inner = task.inner_exclusive_access();
+    if _fd >= inner.fd_table.len() {
+        return -1;
+    }
+    if let Some(inode) = &inner.fd_table[_fd] {
+        let ino = inode.get_ino();
+        let dev = 0 as u64;
+        let mode = inode.file_type();
+        let links = inode.link_num();
+
+        let rst = Stat {
+            dev: dev,
+            ino: ino,
+            mode: mode,
+            nlink: links as u32,
+            pad: [0;7],
+            };
+        let tisize = core::mem::size_of::<Stat>();
+        let mut buffers = translated_byte_buffer(current_user_token(), _st as *mut u8, tisize);
+        assert!(buffers.len() == 1 || buffers.len() == 2, "Can not correctly get the physical page of _ti");
+        if buffers.len() == 1 {
+            let buffer = buffers.get_mut(0).unwrap();
+            assert!(buffer.len() == tisize);
+            unsafe { buffer.copy_from_slice(core::slice::from_raw_parts((&rst as *const Stat) as *const u8, tisize)); }
+        } else {
+            assert!(buffers[0].len() + buffers[1].len() == tisize);
+            let first_half = buffers.get_mut(0).unwrap();
+            let first_half_len = first_half.len();
+            unsafe {
+                first_half.copy_from_slice(core::slice::from_raw_parts((&rst as *const Stat) as *const u8, first_half.len()));
+            }
+            let second_half = buffers.get_mut(1).unwrap();
+            unsafe {
+                second_half.copy_from_slice(core::slice::from_raw_parts(((&rst as *const Stat) as usize + first_half_len) as *const u8 , second_half.len()));
+            }
+        }
+        0
+    } else {
+        -1
+    }
 }
 
 /// YOUR JOB: Implement linkat.
@@ -90,7 +130,12 @@ pub fn sys_linkat(_old_name: *const u8, _new_name: *const u8) -> isize {
         "kernel:pid[{}] sys_linkat NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let token = current_user_token();
+    let old = translated_str(token, _old_name);
+    let new = translated_str(token, _new_name);
+
+    link(old.as_str(), new.as_str());
+    0
 }
 
 /// YOUR JOB: Implement unlinkat.
@@ -99,5 +144,9 @@ pub fn sys_unlinkat(_name: *const u8) -> isize {
         "kernel:pid[{}] sys_unlinkat NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let token = current_user_token();
+    let path = translated_str(token, _name);
+
+    unlink(path.as_str());
+    0
 }
