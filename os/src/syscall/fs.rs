@@ -1,5 +1,5 @@
 //! File and filesystem-related syscalls
-use crate::fs::{open_file, OpenFlags, Stat, link, unlink};
+use crate::fs::{open_file, OpenFlags, Stat, link, unlink, link_num};
 use crate::mm::{translated_byte_buffer, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token};
 
@@ -90,8 +90,9 @@ pub fn sys_fstat(_fd: usize, _st: *mut Stat) -> isize {
         let ino = inode.get_ino();
         let dev = 0 as u64;
         let mode = inode.file_type();
-        let links = inode.link_num();
+        let links = link_num(ino as usize);
 
+        drop(inner);
         let rst = Stat {
             dev: dev,
             ino: ino,

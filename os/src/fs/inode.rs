@@ -80,6 +80,10 @@ pub fn unlink(path: &str) {
     ROOT_INODE.unlinkat(path);
 }
 
+/// links
+pub fn link_num(ino: usize) -> usize {
+    ROOT_INODE.get_links(ino as usize) 
+}
 bitflags! {
     ///  The flags argument to the open() system call is constructed by ORing together zero or more of the following values:
     pub struct OpenFlags: u32 {
@@ -176,10 +180,5 @@ impl File for OSInode {
            1 => super::StatMode::FILE,
            _ => super::StatMode::DIR,
        }
-    }
-
-    fn link_num(&self) -> usize {
-       let ino = self.get_ino();
-       self.inner.exclusive_access().inode.get_links(ino as usize) 
     }
 }

@@ -47,10 +47,6 @@ impl File for Stdin {
     fn file_type(&self) -> super::StatMode {
         todo!()
     }
-
-    fn link_num(&self) -> usize {
-        todo!()
-    }
 }
 
 impl File for Stdout {
@@ -77,7 +73,4 @@ impl File for Stdout {
         todo!()
     }
 
-    fn link_num(&self) -> usize {
-        todo!()
-    }
 }

@@ -19,8 +19,6 @@ pub trait File: Send + Sync {
     fn get_ino(&self) -> u64;
     /// file type
     fn file_type(&self) -> StatMode;
-    /// link num
-    fn link_num(&self) -> usize;
 }
 
 /// The stat of a inode
@@ -52,5 +50,5 @@ bitflags! {
     }
 }
 
-pub use inode::{list_apps, open_file, link, unlink, OSInode, OpenFlags};
+pub use inode::{list_apps, open_file, link, unlink, link_num, OSInode, OpenFlags};
 pub use stdio::{Stdin, Stdout};
