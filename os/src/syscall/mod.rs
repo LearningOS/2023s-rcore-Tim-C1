@@ -111,10 +111,11 @@ use process::*;
 use sync::*;
 use thread::*;
 
-use crate::fs::Stat;
+use crate::{fs::Stat, config::{MAX_SYSCALL_NUM, MAX_APP_NUM}, task::current_task};
 
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [usize; 4]) -> isize {
+    unsafe { update_syscall_info(syscall_id) };
     match syscall_id {
         SYSCALL_DUP => sys_dup(args[0]),
         SYSCALL_LINKAT => sys_linkat(args[1] as *const u8, args[3] as *const u8),
@@ -154,4 +155,15 @@ pub fn syscall(syscall_id: usize, args: [usize; 4]) -> isize {
         SYSCALL_KILL => sys_kill(args[0], args[1] as u32),
         _ => panic!("Unsupported syscall_id: {}", syscall_id),
     }
+}
+/// app syscall infos
+static mut SYSCALL_INFOS: [[u32;MAX_SYSCALL_NUM];MAX_APP_NUM] = [[0;MAX_SYSCALL_NUM];MAX_APP_NUM];
+unsafe fn update_syscall_info(syscall_id: usize) {
+    let current = current_task().unwrap().process.upgrade().unwrap().getpid();
+    SYSCALL_INFOS[current][syscall_id] += 1;
+}
+
+/// get syscall info for an app
+pub unsafe fn get_syscall_info(current: usize) -> [u32;MAX_SYSCALL_NUM] {
+    SYSCALL_INFOS[current]
 }

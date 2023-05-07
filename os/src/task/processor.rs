@@ -7,11 +7,14 @@
 use super::__switch;
 use super::{fetch_task, TaskStatus};
 use super::{ProcessControlBlock, TaskContext, TaskControlBlock};
+use crate::mm::{VirtAddr, MapPermission, VirtPageNum};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::sync::Arc;
 use lazy_static::*;
 
+/// total run time
+pub static mut RUN_TIME: usize = 0;
 /// Processor management structure
 pub struct Processor {
     current: Option<Arc<TaskControlBlock>>,
@@ -41,6 +44,38 @@ impl Processor {
     ///Get current task in cloning semanteme
     pub fn current(&self) -> Option<Arc<TaskControlBlock>> {
         self.current.as_ref().map(Arc::clone)
+    }
+    /// map a new area
+    pub fn map_new_area(&self, va_start: VirtAddr, va_end: VirtAddr, flags: u8) {
+        let binding = current_task().unwrap().process.upgrade().unwrap();
+        let memset = &mut binding.inner_exclusive_access().memory_set;
+        let mut perm = MapPermission::U;
+        if (flags & 0x1) > 0 {
+            perm |= MapPermission::R;
+        }
+
+        if (flags & 0x2) > 0 {
+            perm |= MapPermission::W;
+        }
+
+        if (flags & 0x4) > 0 {
+            perm |= MapPermission::X;
+        }
+        memset.insert_framed_area(va_start, va_end, perm); 
+    }
+
+    /// unmap an area
+    pub fn unmap_area(&self, va_start: VirtAddr) {
+        let binding = current_task().unwrap().process.upgrade().unwrap();
+        let memset = &mut binding.inner_exclusive_access().memory_set;
+        memset.unmap_area(va_start);
+    }
+
+    /// check has mapped
+    pub fn has_mapped(&self, vpn: VirtPageNum) -> bool {
+        let binding = current_task().unwrap().process.upgrade().unwrap();
+        let memset = &mut binding.inner_exclusive_access().memory_set;
+        memset.has_mapped(vpn)
     }
 }
 
@@ -127,4 +162,20 @@ pub fn schedule(switched_task_cx_ptr: *mut TaskContext) {
     unsafe {
         __switch(switched_task_cx_ptr, idle_task_cx_ptr);
     }
+}
+/// for mmap 
+pub fn map_new_area(va_start: VirtAddr, va_end: VirtAddr, flags: u8) {
+    PROCESSOR.exclusive_access().map_new_area(va_start, va_end, flags);
+}
+
+
+/// for munmap
+pub fn unmap_area(va_start: VirtAddr) {
+    PROCESSOR.exclusive_access().unmap_area(va_start);
+}
+
+
+/// has mapped
+pub fn has_mapped(vpn: VirtPageNum) -> bool {
+    PROCESSOR.exclusive_access().has_mapped(vpn)
 }
